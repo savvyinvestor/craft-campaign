@@ -229,6 +229,66 @@ class SendoutsService extends Component
     }
 
     /**
+     * Takes a sendout and splits it into multiple sendouts based on each timezone
+     * 
+     * @param SendoutElement $sendout
+     * 
+     * @return array
+     */
+    public function createSendoutsByTimezone(SendoutElement $sendout): array
+    {
+        $sendoutsByTimezone = array();
+
+        $recipientCountryCodes = $this->getRecipientCountryCodes($sendout);
+
+        print_r($recipientCountryCodes); exit;
+
+        return $sendoutsByTimezone;
+    }
+
+    /**
+     * Takes a sendout and returns an array of all the timezones for the mailing list of the sendout
+     * 
+     * @param SendoutElement $sendout
+     * 
+     * @return array
+     */
+    public function getRecipientCountryCodes(SendoutElement $sendout): array
+    {
+        $countryCodes = array();
+
+        $mailingLists = $sendout->getMailingLists();
+       
+        foreach($mailingLists as $mailingList)
+        {
+            $subscribedContacts = $mailingList->subscribedContacts;
+
+            foreach($subscribedContacts as $contact)
+            {
+                $user  = $contact->getUser();
+    
+                if(strlen($user->country) == 2)
+                {
+                    $countryCode = $user->country->value;
+                   
+                }else{
+                    $countryCode = 'GB';
+                }
+
+                if(!in_array($countryCode, $countryCodes))
+                {
+                    array_push($countryCodes, $countryCode);
+                }
+                  
+            }
+
+        }
+
+        return $countryCodes;
+
+    } 
+
+    /**
      * Queues pending sendouts
      *
      * @return int
@@ -250,8 +310,16 @@ class SendoutsService extends Component
                 ->where(Db::parseDateParam('sendDate', $now, '<='))
                 ->all();
 
+           
             /** @var SendoutElement $sendout */
             foreach ($sendouts as $sendout) {
+
+               // ##### Savvy code #####ß
+                $sendoutsByTimezone = $this->createSendoutsByTimezone($sendout);
+               // ##### End Savvy Code #####
+
+                exit;
+
                 // Queue regular and scheduled sendouts, automated and recurring sendouts if pro version and the sendout can send now
                 if ($sendout->sendoutType == 'regular' || $sendout->sendoutType == 'scheduled'
                     || (($sendout->sendoutType == 'automated' || $sendout->sendoutType == 'recurring')

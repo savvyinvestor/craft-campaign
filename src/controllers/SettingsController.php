@@ -435,6 +435,8 @@ class SettingsController extends Controller
     {
         $this->requirePostRequest();
 
+        die('HERE');
+
         $settings = $this->_settings;
 
         // Set the simple stuff

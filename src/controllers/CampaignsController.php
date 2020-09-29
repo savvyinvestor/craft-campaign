@@ -205,6 +205,7 @@ class CampaignsController extends Controller
      */
     public function actionPreviewCampaign(): Response
     {
+
         $this->requirePostRequest();
 
         $campaign = $this->_getCampaign();
@@ -233,6 +234,7 @@ class CampaignsController extends Controller
      */
     public function actionSendTest(): Response
     {
+     
         $this->requirePostRequest();
         $this->requireAcceptsJson();
 
