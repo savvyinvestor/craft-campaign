@@ -70,6 +70,11 @@ class SendoutsService extends Component
      */
     const EVENT_AFTER_SEND_EMAIL = 'afterSendEmail';
 
+    /**
+     * 
+     */
+    const GB_TIMEZONE = 'Europe/London';
+
     // Properties
     // =========================================================================
 
@@ -239,23 +244,49 @@ class SendoutsService extends Component
     {
         $sendoutsByTimezone = array();
 
-        $recipientCountryCodes = $this->getRecipientCountryCodes($sendout);
+        // All recipients and their timezones
+        $recipientCountryCodes = $this->getRecipientTimezones($sendout);
 
-        print_r($recipientCountryCodes); exit;
+        // timezones we need to send to
+        $timezonesUnique = array_unique(array_keys($recipientCountryCodes));
+
+        // For each timezone, create a separate sendout, work out the time difference for each and set that as the send date for the sendout
+        $count = 0;
+        foreach($timezonesUnique as $timezone)
+        {
+
+            // Adjust the sendDate based on $timezone
+            // $dateTimeGMT = new \DateTimeZone('');
+            $dateTimeAdjust = new \DateTimeZone('Europe/Luxembourg');
+
+            $dateTimeLux = new DateTime('now', $dateTimeAdjust);
+
+            $timeOffset = $dateTimeAdjust->getOffset($dateTimeLux);
+
+            print_r($timeOffset); exit;
+            // Clone the sendout
+            ${'sendout' . $count} = clone $sendout;
+
+            array_push($sendoutsByTimezone, ${'sendout' . $count});
+
+            $count++;
+        }
+
+       
 
         return $sendoutsByTimezone;
     }
 
     /**
-     * Takes a sendout and returns an array of all the timezones for the mailing list of the sendout
+     * Takes a sendout and returns an associative array of timezone : user email
      * 
      * @param SendoutElement $sendout
      * 
      * @return array
      */
-    public function getRecipientCountryCodes(SendoutElement $sendout): array
+    public function getRecipientTimezones(SendoutElement $sendout): array
     {
-        $countryCodes = array();
+        $recipientTimezones = array();
 
         $mailingLists = $sendout->getMailingLists();
        
@@ -265,26 +296,23 @@ class SendoutsService extends Component
 
             foreach($subscribedContacts as $contact)
             {
-                $user  = $contact->getUser();
-    
-                if(strlen($user->country) == 2)
+           
+                if(!empty($contact->userTimeZone->value))
                 {
-                    $countryCode = $user->country->value;
+                    $timezone = $contact->userTimeZone->value;
+                    
+                    $recipientTimezones += [$timezone => $contact->email];
                    
                 }else{
-                    $countryCode = 'GB';
-                }
 
-                if(!in_array($countryCode, $countryCodes))
-                {
-                    array_push($countryCodes, $countryCode);
+                    $recipientTimezones += [self::GB_TIMEZONE => $contact->email];
                 }
                   
             }
 
         }
 
-        return $countryCodes;
+        return $recipientTimezones;
 
     } 
 
