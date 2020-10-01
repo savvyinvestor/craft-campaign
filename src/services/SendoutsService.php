@@ -234,6 +234,22 @@ class SendoutsService extends Component
     }
 
     /**
+     * 
+     */
+    public function converstSecondsToHours(int $seconds): int
+    {
+        $hours = 0;
+
+        if (is_numeric($seconds))
+        {
+            $hours = $seconds / 3600;
+        }
+
+        return $hours;
+
+    }
+
+    /**
      * Takes a sendout and splits it into multiple sendouts based on each timezone
      * 
      * @param SendoutElement $sendout
@@ -255,15 +271,22 @@ class SendoutsService extends Component
         foreach($timezonesUnique as $timezone)
         {
 
+          //  print_r($sendout->sendDate); exit;
             // Adjust the sendDate based on $timezone
-            // $dateTimeGMT = new \DateTimeZone('');
-            $dateTimeAdjust = new \DateTimeZone('Europe/Luxembourg');
+            $dateTimeZoneAdjust = new \DateTimeZone($timezone);
 
-            $dateTimeLux = new DateTime('now', $dateTimeAdjust);
+            $dateTimeAdjust = new DateTime($sendout->sendDate->format('Y-m-d H:i:s'), $dateTimeZoneAdjust);
 
-            $timeOffset = $dateTimeAdjust->getOffset($dateTimeLux);
+            $timeOffset = $dateTimeZoneAdjust->getOffset($dateTimeAdjust);
 
-            print_r($timeOffset); exit;
+            $hoursOffset = $this->converstSecondsToHours($timeOffset);
+        
+            //     echo date("Y-m-d H:i:s",(time())) ; exit;
+
+            $sendDateForTimeZone = $sendout->sendDate->modify("+$hoursOffset hour");
+
+            $sendout->sendDate = $sendDateForTimeZone;
+
             // Clone the sendout
             ${'sendout' . $count} = clone $sendout;
 
@@ -272,7 +295,7 @@ class SendoutsService extends Component
             $count++;
         }
 
-       
+  //      print_r(sizeof($sendoutsByTimezone)); exit;
 
         return $sendoutsByTimezone;
     }
@@ -331,6 +354,7 @@ class SendoutsService extends Component
         $sites = Craft::$app->getSites()->getAllSites();
 
         foreach ($sites as $site) {
+        
             // Find pending sendouts whose send date is in the past
             $sendouts = SendoutElement::find()
                 ->site($site)
@@ -338,7 +362,6 @@ class SendoutsService extends Component
                 ->where(Db::parseDateParam('sendDate', $now, '<='))
                 ->all();
 
-           
             /** @var SendoutElement $sendout */
             foreach ($sendouts as $sendout) {
 
@@ -346,29 +369,34 @@ class SendoutsService extends Component
                 $sendoutsByTimezone = $this->createSendoutsByTimezone($sendout);
                // ##### End Savvy Code #####
 
-                exit;
+        //        exit;
 
-                // Queue regular and scheduled sendouts, automated and recurring sendouts if pro version and the sendout can send now
-                if ($sendout->sendoutType == 'regular' || $sendout->sendoutType == 'scheduled'
-                    || (($sendout->sendoutType == 'automated' || $sendout->sendoutType == 'recurring')
-                        && Campaign::$plugin->getIsPro() && $sendout->getCanSendNow()
-                    )
-                ) {
-                    /** @var Queue $queue */
-                    $queue = Craft::$app->getQueue();
+                foreach($sendoutsByTimezone as $sendoutByTimezone){
 
-                    // Add sendout job to queue
-                    $queue->push(new SendoutJob([
-                        'sendoutId' => $sendout->id,
-                        'title' => $sendout->title,
-                    ]));
+                    // Queue regular and scheduled sendouts, automated and recurring sendouts if pro version and the sendout can send now
+                    if ($sendoutByTimezone->sendoutType == 'regular' || $sendoutByTimezone->sendoutType == 'scheduled'
+                        || (($sendoutByTimezone->sendoutType == 'automated' || $sendoutByTimezone->sendoutType == 'recurring')
+                            && Campaign::$plugin->getIsPro() && $sendoutByTimezone->getCanSendNow()
+                        )
+                    ) {
+                        /** @var Queue $queue */
+                        $queue = Craft::$app->getQueue();
 
-                    $sendout->sendStatus = SendoutElement::STATUS_QUEUED;
+                        // Add sendout job to queue
+                        $queue->push(new SendoutJob([
+                            'sendoutId' => $sendoutByTimezone->id,
+                            'title' => $sendoutByTimezone->title,
+                        ]));
 
-                    $this->_updateSendoutRecord($sendout, ['sendStatus']);
+                        $sendoutByTimezone->sendStatus = SendoutElement::STATUS_QUEUED;
 
-                    $count++;
+                        $this->_updateSendoutRecord($sendoutByTimezone, ['sendStatus']);
+
+                        $count++;
+                    }
+
                 }
+
             }
         }
 
