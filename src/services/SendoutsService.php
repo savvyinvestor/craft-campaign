@@ -271,7 +271,6 @@ class SendoutsService extends Component
         foreach($timezonesUnique as $timezone)
         {
 
-          //  print_r($sendout->sendDate); exit;
             // Adjust the sendDate based on $timezone
             $dateTimeZoneAdjust = new \DateTimeZone($timezone);
 
@@ -280,8 +279,6 @@ class SendoutsService extends Component
             $timeOffset = $dateTimeZoneAdjust->getOffset($dateTimeAdjust);
 
             $hoursOffset = $this->converstSecondsToHours($timeOffset);
-        
-            //     echo date("Y-m-d H:i:s",(time())) ; exit;
 
             $sendDateForTimeZone = $sendout->sendDate->modify("+$hoursOffset hour");
 
@@ -295,7 +292,7 @@ class SendoutsService extends Component
             $count++;
         }
 
-  //      print_r(sizeof($sendoutsByTimezone)); exit;
+   //    echo sizeof($sendoutsByTimezone); exit;
 
         return $sendoutsByTimezone;
     }
@@ -354,7 +351,7 @@ class SendoutsService extends Component
         $sites = Craft::$app->getSites()->getAllSites();
 
         foreach ($sites as $site) {
-        
+            
             // Find pending sendouts whose send date is in the past
             $sendouts = SendoutElement::find()
                 ->site($site)
@@ -365,12 +362,8 @@ class SendoutsService extends Component
             /** @var SendoutElement $sendout */
             foreach ($sendouts as $sendout) {
 
-               // ##### Savvy code #####ß
                 $sendoutsByTimezone = $this->createSendoutsByTimezone($sendout);
-               // ##### End Savvy Code #####
-
-        //        exit;
-
+        
                 foreach($sendoutsByTimezone as $sendoutByTimezone){
 
                     // Queue regular and scheduled sendouts, automated and recurring sendouts if pro version and the sendout can send now
