@@ -261,8 +261,8 @@ class SendoutsService extends Component
         $mailingList->mailingListTypeId = 1;
         $mailingList->title = $title . ': ' . $timezone . ' sent: ' . date("Y-m-d H:i:s");
         $mailingList->slug = $title . ': ' . $timezone . ' sent: ' . date("Y-m-d H:i:s");
-        $mailingList->enabled = '';
-        $mailingList->fieldLayoutId = '';
+        $mailingList->enabled = true;
+        //$mailingList->fieldLayoutId = '';
 
         if (!Craft::$app->getElements()->saveElement($mailingList)) {
             echo 'Could not save mailing list.';
@@ -350,11 +350,15 @@ class SendoutsService extends Component
         // timezones we need to send to
         $timezonesUnique = $this->uniqueTimezonesForSendout($recipientTimezones);
 
+        echo 'Send datetime: ' . $sendout->sendDate->format('Y-m-d H:i:s') . "\n";
+
         // For each timezone, create a separate sendout, work out the time difference for each and set that as the send date for the sendout
         $count = 0;
         foreach($timezonesUnique as $timezone)
         {
 
+            $date = new DateTime($sendout->sendDate->format('Y-m-d H:i:s'), new \DateTimeZone($timezone) );
+            echo $date->format('Y-m-d H:i:s') . "\n";
             // Adjust the sendDate based on $timezone
             $dateTimeZoneAdjust = new \DateTimeZone($timezone);
 
@@ -362,33 +366,34 @@ class SendoutsService extends Component
 
             $timeOffset = $dateTimeZoneAdjust->getOffset($dateTimeAdjust);
 
-            $hoursOffset = $this->convertSecondsToHours($timeOffset);
+            $hoursOffset = $this->convertSecondsToHours($timeOffset);  // Subtracting 1 as the getOffset seems to be an hour ahead. Need to investigate.
 
             $sendDateForTimeZone = $sendout->sendDate->modify("+$hoursOffset hour");
 
-            $sendout->sendDate = $sendDateForTimeZone;
+         //   echo $sendDateForTimeZone->format("Y-m-d H:i:s") . ' ' . $timezone . "\n";
 
-            // Create a new mailing list for the timezone / contacts
-            $mailingListForTimezone = $this->createMailingListForTimezone($sendout->campaign->title, $recipientTimezones, $timezone);
+            // if($this->canSendScheduleForTimezoneNow($sendDateForTimeZone)){
+            //     $sendout->sendDate = $sendDateForTimeZone;
 
-            $sendout->mailingListIds = null;
-
-            echo 'Mailing list ids before: ' . $sendout->mailingListIds . "\n";
-
-            $sendout->mailingListIds = $mailingListForTimezone->id;
-
-            echo 'Mailing list ids after: ' . $sendout->mailingListIds . "\n";
-            
-            exit;
-        
-            // Clone the sendout
-            ${'sendout' . $count} = clone $sendout;
-
-            array_push($sendoutsByTimezone, ${'sendout' . $count});
-
+            //     // Create a new mailing list for the timezone / contacts
+            //     $mailingListForTimezone = $this->createMailingListForTimezone($sendout->campaign->title, $recipientTimezones, $timezone);
+    
+            //     // Remove existing mail lists
+            //     $sendout->mailingListIds = null;
+    
+            //     // Add mail list created for timezone
+            //     $sendout->mailingListIds = $mailingListForTimezone->id;
+    
+            //     // Clone the sendout
+            //     ${'sendout' . $count} = clone $sendout;
+            //     array_push($sendoutsByTimezone, ${'sendout' . $count});
+            // }
+           
             $count++;
         }
 
+        print_r(sizeof($sendoutsByTimezone));
+        exit;
         return $sendoutsByTimezone;
     }
 
@@ -465,19 +470,20 @@ class SendoutsService extends Component
        /**
      * @inheritdoc
      */
-    public function canSendScheduleForTimezoneNow(SendoutElement $sendout): bool
+    public function canSendScheduleForTimezoneNow(DateTime $sendTime): bool
     {
+        print_r($sendTime); 
         // Ensure send date is in the past
-        if (!DateTimeHelper::isInThePast($sendout->sendDate)) {
+        if (!DateTimeHelper::isInThePast($sendTime)) {
             return false;
         }
 
         // Ensure time of day has past
-        if ($sendout->sendDate !== null) {
+        if ($sendTime !== null) {
             $now = new DateTime();
             $format = 'H:i';
 
-            if ($sendout->sendDate->format($format) > $now->format($format)) {
+            if ($sendTime->format($format) > $now->format($format)) {
                 return false;
             }
         }
@@ -493,7 +499,7 @@ class SendoutsService extends Component
            foreach($sendoutsByTimezone as $sendoutByTimezone){
 
                // Queue scheduled sendouts if pro version and the sendOutDate has passed
-               if (Campaign::$plugin->getIsPro() && $this->canSendScheduleForTimezoneNow($sendoutByTimezone))
+               if (Campaign::$plugin->getIsPro())
                 {
 
                    /** @var Queue $queue */
