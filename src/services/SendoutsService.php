@@ -30,11 +30,13 @@ use craft\errors\ElementNotFoundException;
 use craft\helpers\Db;
 use craft\helpers\UrlHelper;
 use craft\mail\Mailer;
+use putyourlightson\campaign\elements\MailingListElement;
 use putyourlightson\campaign\records\SendoutRecord;
 use Throwable;
 use yii\base\Exception;
 use yii\base\InvalidConfigException;
 use yii\db\ActiveQuery;
+
 
 /**
  * SendoutsService
@@ -236,7 +238,7 @@ class SendoutsService extends Component
     /**
      * 
      */
-    public function converstSecondsToHours(int $seconds): int
+    public function convertSecondsToHours(int $seconds): int
     {
         $hours = 0;
 
@@ -246,6 +248,88 @@ class SendoutsService extends Component
         }
 
         return $hours;
+
+    }
+
+    /**
+     * 
+     */
+    public function createMailingListForTimezone(string $title, array $recipientTimezones, string $timezone): MailingListElement
+    {
+        $mailingList = new MailingListElement();
+
+        $mailingList->mailingListTypeId = 1;
+        $mailingList->title = $title . ': ' . $timezone . ' sent: ' . date("Y-m-d H:i:s");
+        $mailingList->slug = $title . ': ' . $timezone . ' sent: ' . date("Y-m-d H:i:s");
+        $mailingList->enabled = '';
+        $mailingList->fieldLayoutId = '';
+
+        if (!Craft::$app->getElements()->saveElement($mailingList)) {
+            echo 'Could not save mailing list.';
+        }
+
+        // Add contacts to mailing list
+        $contactsForTimezone = $this->getContactsForTimezone($recipientTimezones, $timezone);
+
+        foreach($contactsForTimezone as $contact)
+        {
+            $this->subscribeContactToMailingList($contact, $mailingList);
+        }
+
+        if (!Craft::$app->getElements()->saveElement($mailingList)) {
+            echo 'Could not save mailing list.';
+        }
+ 
+        return $mailingList ;
+    }
+
+    private function subscribeContactToMailingList(ContactElement $contact, MailingListElement $mailingList)
+    {
+        $subscriptionStatus = 'subscribed';
+        /** @var User|null $currentUser */
+        $currentUser = Craft::$app->getUser()->getIdentity();
+        $currentUserId = $currentUser ? $currentUser->id : '';
+        Campaign::$plugin->mailingLists->addContactInteraction($contact, $mailingList, $subscriptionStatus, 'user', $currentUserId);
+    }
+
+    public function getContactsForTimezone(array $recipientTimezones, string $timezone): array
+    {
+        $contacts = array();
+
+        if (!empty($recipientTimezones) && sizeof($recipientTimezones) > 0){
+            foreach($recipientTimezones as $recipientTimezone)
+            {
+                if($recipientTimezone['timezone'] == $timezone){
+                    if(!in_array($recipientTimezone['email'], $contacts)){
+                        $contact = Campaign::$plugin->contacts->getContactByEmail($recipientTimezone['email']);
+                        array_push($contacts, $contact);
+                    }
+                }
+            }
+        }
+
+        return $contacts;
+    }
+
+    private function uniqueTimezonesForSendout(array $recipientTimezones): array
+    {
+
+        $uniqueTimezones = array();
+
+        if (!empty($recipientTimezones) && sizeof($recipientTimezones) > 0){
+
+            foreach($recipientTimezones as $recipientTimezone)
+            {
+                $tz = $recipientTimezone['timezone'];
+
+                if(!in_array($tz, $uniqueTimezones)){
+                    array_push($uniqueTimezones, $tz);
+                }
+                
+            }
+        }
+        
+        return $uniqueTimezones;
 
     }
 
@@ -261,10 +345,10 @@ class SendoutsService extends Component
         $sendoutsByTimezone = array();
 
         // All recipients and their timezones
-        $recipientCountryCodes = $this->getRecipientTimezones($sendout);
+        $recipientTimezones = $this->getRecipientTimezones($sendout);
 
         // timezones we need to send to
-        $timezonesUnique = array_unique(array_keys($recipientCountryCodes));
+        $timezonesUnique = $this->uniqueTimezonesForSendout($recipientTimezones);
 
         // For each timezone, create a separate sendout, work out the time difference for each and set that as the send date for the sendout
         $count = 0;
@@ -278,12 +362,25 @@ class SendoutsService extends Component
 
             $timeOffset = $dateTimeZoneAdjust->getOffset($dateTimeAdjust);
 
-            $hoursOffset = $this->converstSecondsToHours($timeOffset);
+            $hoursOffset = $this->convertSecondsToHours($timeOffset);
 
             $sendDateForTimeZone = $sendout->sendDate->modify("+$hoursOffset hour");
 
             $sendout->sendDate = $sendDateForTimeZone;
 
+            // Create a new mailing list for the timezone / contacts
+            $mailingListForTimezone = $this->createMailingListForTimezone($sendout->campaign->title, $recipientTimezones, $timezone);
+
+            $sendout->mailingListIds = null;
+
+            echo 'Mailing list ids before: ' . $sendout->mailingListIds . "\n";
+
+            $sendout->mailingListIds = $mailingListForTimezone->id;
+
+            echo 'Mailing list ids after: ' . $sendout->mailingListIds . "\n";
+            
+            exit;
+        
             // Clone the sendout
             ${'sendout' . $count} = clone $sendout;
 
@@ -291,8 +388,6 @@ class SendoutsService extends Component
 
             $count++;
         }
-
-   //    echo sizeof($sendoutsByTimezone); exit;
 
         return $sendoutsByTimezone;
     }
@@ -321,20 +416,106 @@ class SendoutsService extends Component
                 {
                     $timezone = $contact->userTimeZone->value;
                     
-                    $recipientTimezones += [$timezone => $contact->email];
+                    $recipientTimezones[] = ['timezone' => $timezone, 'email' => $contact->email];
                    
                 }else{
 
-                    $recipientTimezones += [self::GB_TIMEZONE => $contact->email];
+                //    $recipientTimezones += [self::GB_TIMEZONE => $contact->email];
+                    $recipientTimezones[] = ['timezone' => self::GB_TIMEZONE , 'email' => $contact->email];
                 }
                   
             }
 
         }
-
+ 
         return $recipientTimezones;
 
     } 
+
+    private function processSendout(SendoutElement $sendout, int $count): int 
+    {
+
+            // Queue regular and scheduled sendouts, automated and recurring sendouts if pro version and the sendout can send now
+            if ($sendout->sendoutType == 'regular' || $sendout->sendoutType == 'scheduled'
+            || (($sendout->sendoutType == 'automated' || $sendout->sendoutType == 'recurring')
+                && Campaign::$plugin->getIsPro() && $sendout->getCanSendNow()
+                )
+            ) 
+            {
+                /** @var Queue $queue */
+                $queue = Craft::$app->getQueue();
+
+                // Add sendout job to queue
+                $queue->push(new SendoutJob([
+                    'sendoutId' => $sendout->id,
+                    'title' => $sendout->title,
+                ]));
+
+                $sendout->sendStatus = SendoutElement::STATUS_QUEUED;
+
+                $this->_updateSendoutRecord($sendout, ['sendStatus']);
+
+                $count++;
+            }
+
+            return $count;
+
+    }
+
+       /**
+     * @inheritdoc
+     */
+    public function canSendScheduleForTimezoneNow(SendoutElement $sendout): bool
+    {
+        // Ensure send date is in the past
+        if (!DateTimeHelper::isInThePast($sendout->sendDate)) {
+            return false;
+        }
+
+        // Ensure time of day has past
+        if ($sendout->sendDate !== null) {
+            $now = new DateTime();
+            $format = 'H:i';
+
+            if ($sendout->sendDate->format($format) > $now->format($format)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private function processScheduledSendouts(SendoutElement $sendout, int $count): int
+    {
+
+           // Split the sendout into separate sendouts by timezone
+           $sendoutsByTimezone = $this->createSendoutsByTimezone($sendout);
+
+           foreach($sendoutsByTimezone as $sendoutByTimezone){
+
+               // Queue scheduled sendouts if pro version and the sendOutDate has passed
+               if (Campaign::$plugin->getIsPro() && $this->canSendScheduleForTimezoneNow($sendoutByTimezone))
+                {
+
+                   /** @var Queue $queue */
+                   $queue = Craft::$app->getQueue();
+
+                   // Add sendout job to queue
+                   $queue->push(new SendoutJob([
+                       'sendoutId' => $sendoutByTimezone->id,
+                       'title' => $sendoutByTimezone->title,
+                   ]));
+
+                   $sendoutByTimezone->sendStatus = SendoutElement::STATUS_QUEUED;
+
+                   $this->_updateSendoutRecord($sendoutByTimezone, ['sendStatus']);
+
+                   $count++;
+               }
+
+           }
+
+           return $count;
+    }
 
     /**
      * Queues pending sendouts
@@ -362,36 +543,26 @@ class SendoutsService extends Component
             /** @var SendoutElement $sendout */
             foreach ($sendouts as $sendout) {
 
-                $sendoutsByTimezone = $this->createSendoutsByTimezone($sendout);
-        
-                foreach($sendoutsByTimezone as $sendoutByTimezone){
-
-                    // Queue regular and scheduled sendouts, automated and recurring sendouts if pro version and the sendout can send now
-                    if ($sendoutByTimezone->sendoutType == 'regular' || $sendoutByTimezone->sendoutType == 'scheduled'
-                        || (($sendoutByTimezone->sendoutType == 'automated' || $sendoutByTimezone->sendoutType == 'recurring')
-                            && Campaign::$plugin->getIsPro() && $sendoutByTimezone->getCanSendNow()
-                        )
-                    ) {
-                        /** @var Queue $queue */
-                        $queue = Craft::$app->getQueue();
-
-                        // Add sendout job to queue
-                        $queue->push(new SendoutJob([
-                            'sendoutId' => $sendoutByTimezone->id,
-                            'title' => $sendoutByTimezone->title,
-                        ]));
-
-                        $sendoutByTimezone->sendStatus = SendoutElement::STATUS_QUEUED;
-
-                        $this->_updateSendoutRecord($sendoutByTimezone, ['sendStatus']);
-
-                        $count++;
-                    }
-
+                switch($sendout->sendoutType)
+                {
+                    case 'regular':
+                        $this->processSendout($sendout, $count);
+                        break;
+                    case 'automated':
+                        $this->processSendout($sendout, $count);
+                        break;
+                    case 'recurring':
+                        $this->processSendout($sendout, $count);
+                        break;
+                    case 'scheduled':
+                        $this->processScheduledSendouts($sendout, $count);
+                        break;
+                    default:
+                        echo 'Sendout type did not match. Campaign did not run.';         
+                
                 }
-
+             }
             }
-        }
 
         return $count;
     }

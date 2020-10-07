@@ -45,6 +45,7 @@ use yii\base\InvalidConfigException;
  */
 class MailingListElement extends Element
 {
+
     // Static Methods
     // =========================================================================
 

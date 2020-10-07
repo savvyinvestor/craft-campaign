@@ -74,6 +74,7 @@ class SendoutElement extends Element
     const STATUS_FAILED = 'failed';
     const STATUS_DRAFT = 'draft';
 
+
     // Static Methods
     // =========================================================================
 
