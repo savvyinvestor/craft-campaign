@@ -30,6 +30,7 @@ use craft\errors\ElementNotFoundException;
 use craft\helpers\Db;
 use craft\helpers\UrlHelper;
 use craft\mail\Mailer;
+use DateTimeZone;
 use putyourlightson\campaign\elements\MailingListElement;
 use putyourlightson\campaign\records\SendoutRecord;
 use Throwable;
@@ -333,6 +334,32 @@ class SendoutsService extends Component
 
     }
 
+    public function calculateDateTimeForTimezone(string $timezone, DateTime $sendDate): DateTime
+    {
+
+        $gmtTimezone = new \DateTimeZone('GMT');
+        $userTimezone = new \DateTimeZone($timezone);
+        $sendDateTime = new DateTime($sendDate->format('Y-m-d H:i:s'), $gmtTimezone);
+        $offset = $userTimezone->getOffset($sendDateTime);
+        $dst = date('I');
+
+        // Factor for day light savings
+        if($dst == 1){
+            $offset -= 3600;
+        }
+
+        // If timezone is in the past
+        if($offset <0){
+            $offset += 86400;
+        }
+    
+        $myInterval = \DateInterval::createFromDateString((string)$offset . 'seconds');
+        $sendDateTime->add($myInterval);
+
+        return $sendDateTime;
+       
+    }
+
     /**
      * Takes a sendout and splits it into multiple sendouts based on each timezone
      * 
@@ -350,26 +377,18 @@ class SendoutsService extends Component
         // timezones we need to send to
         $timezonesUnique = $this->uniqueTimezonesForSendout($recipientTimezones);
 
-        echo 'Send datetime: ' . $sendout->sendDate->format('Y-m-d H:i:s') . "\n";
-
         // For each timezone, create a separate sendout, work out the time difference for each and set that as the send date for the sendout
         $count = 0;
+        
         foreach($timezonesUnique as $timezone)
         {
 
-            $date = new DateTime($sendout->sendDate->format('Y-m-d H:i:s'), new \DateTimeZone($timezone) );
-            echo $date->format('Y-m-d H:i:s') . "\n";
+        //    echo $sendout->sendDate->format('Y-m-d H:i:s') ."\n";
             // Adjust the sendDate based on $timezone
-            $dateTimeZoneAdjust = new \DateTimeZone($timezone);
+            $sendDateTime = $this->calculateDateTimeForTimezone($timezone, $sendout->sendDate);
 
-            $dateTimeAdjust = new DateTime($sendout->sendDate->format('Y-m-d H:i:s'), $dateTimeZoneAdjust);
-
-            $timeOffset = $dateTimeZoneAdjust->getOffset($dateTimeAdjust);
-
-            $hoursOffset = $this->convertSecondsToHours($timeOffset);  // Subtracting 1 as the getOffset seems to be an hour ahead. Need to investigate.
-
-            $sendDateForTimeZone = $sendout->sendDate->modify("+$hoursOffset hour");
-
+            echo $timezone . ': ' . $sendDateTime->format('Y-m-d H:i:s') . "\n";
+ 
          //   echo $sendDateForTimeZone->format("Y-m-d H:i:s") . ' ' . $timezone . "\n";
 
             // if($this->canSendScheduleForTimezoneNow($sendDateForTimeZone)){
@@ -392,7 +411,7 @@ class SendoutsService extends Component
             $count++;
         }
 
-        print_r(sizeof($sendoutsByTimezone));
+   //     print_r(sizeof($sendoutsByTimezone));
         exit;
         return $sendoutsByTimezone;
     }
