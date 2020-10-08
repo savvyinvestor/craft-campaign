@@ -347,13 +347,8 @@ class SendoutsService extends Component
         if($dst == 1){
             $offset -= 3600;
         }
-
-        // If timezone is in the past
-        if($offset <0){
-            $offset += 86400;
-        }
     
-        $myInterval = \DateInterval::createFromDateString((string)$offset . 'seconds');
+        $myInterval = \DateInterval::createFromDateString((string) abs($offset) . 'seconds');
         $sendDateTime->add($myInterval);
 
         return $sendDateTime;
@@ -379,41 +374,61 @@ class SendoutsService extends Component
 
         // For each timezone, create a separate sendout, work out the time difference for each and set that as the send date for the sendout
         $count = 0;
-        
+
         foreach($timezonesUnique as $timezone)
         {
 
-        //    echo $sendout->sendDate->format('Y-m-d H:i:s') ."\n";
             // Adjust the sendDate based on $timezone
-            $sendDateTime = $this->calculateDateTimeForTimezone($timezone, $sendout->sendDate);
+            $sendDateForTimeZone = $this->calculateDateTimeForTimezone($timezone, $sendout->sendDate);
 
-            echo $timezone . ': ' . $sendDateTime->format('Y-m-d H:i:s') . "\n";
- 
-         //   echo $sendDateForTimeZone->format("Y-m-d H:i:s") . ' ' . $timezone . "\n";
+             echo $timezone . ': ' . $sendDateForTimeZone->format('Y-m-d H:i:s') . "\n";
 
-            // if($this->canSendScheduleForTimezoneNow($sendDateForTimeZone)){
-            //     $sendout->sendDate = $sendDateForTimeZone;
+            if($this->canSendScheduleForTimezoneNow($sendDateForTimeZone)){
+        
+                $sendout->sendDate = $sendDateForTimeZone;
 
-            //     // Create a new mailing list for the timezone / contacts
-            //     $mailingListForTimezone = $this->createMailingListForTimezone($sendout->campaign->title, $recipientTimezones, $timezone);
+                // Create a new mailing list for the timezone / contacts
+                $mailingListForTimezone = $this->createMailingListForTimezone($sendout->campaign->title, $recipientTimezones, $timezone);
     
-            //     // Remove existing mail lists
-            //     $sendout->mailingListIds = null;
+                // Remove existing mail lists
+                $sendout->mailingListIds = null;
     
-            //     // Add mail list created for timezone
-            //     $sendout->mailingListIds = $mailingListForTimezone->id;
+                // Add mail list created for timezone
+                $sendout->mailingListIds = $mailingListForTimezone->id;
     
-            //     // Clone the sendout
-            //     ${'sendout' . $count} = clone $sendout;
-            //     array_push($sendoutsByTimezone, ${'sendout' . $count});
-            // }
+                // Clone the sendout
+                ${'sendout' . $count} = clone $sendout;
+                array_push($sendoutsByTimezone, ${'sendout' . $count});
+            }
            
             $count++;
         }
 
-   //     print_r(sizeof($sendoutsByTimezone));
-        exit;
+     print_r(sizeof($sendoutsByTimezone));
+     exit;
         return $sendoutsByTimezone;
+    }
+
+        /**
+     * @inheritdoc
+     */
+    public function canSendScheduleForTimezoneNow(DateTime $sendTime): bool
+    {
+        // Ensure send date is in the past
+        if (!DateTimeHelper::isInThePast($sendTime)) {
+            return false;
+        }
+
+        // Ensure time of day has past
+        if ($sendTime !== null) {
+            $now = new DateTime();
+            $format = 'H:i';
+
+            if ($sendTime->format($format) > $now->format($format)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -460,7 +475,7 @@ class SendoutsService extends Component
     {
 
             // Queue regular and scheduled sendouts, automated and recurring sendouts if pro version and the sendout can send now
-            if ($sendout->sendoutType == 'regular' || $sendout->sendoutType == 'scheduled'
+            if ($sendout->sendoutType == 'regular' 
             || (($sendout->sendoutType == 'automated' || $sendout->sendoutType == 'recurring')
                 && Campaign::$plugin->getIsPro() && $sendout->getCanSendNow()
                 )
@@ -486,36 +501,18 @@ class SendoutsService extends Component
 
     }
 
-       /**
-     * @inheritdoc
-     */
-    public function canSendScheduleForTimezoneNow(DateTime $sendTime): bool
-    {
-        print_r($sendTime); 
-        // Ensure send date is in the past
-        if (!DateTimeHelper::isInThePast($sendTime)) {
-            return false;
-        }
-
-        // Ensure time of day has past
-        if ($sendTime !== null) {
-            $now = new DateTime();
-            $format = 'H:i';
-
-            if ($sendTime->format($format) > $now->format($format)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     private function processScheduledSendouts(SendoutElement $sendout, int $count): int
     {
 
-           // Split the sendout into separate sendouts by timezone
-           $sendoutsByTimezone = $this->createSendoutsByTimezone($sendout);
+        $mailingListIds = array();
+
+        // Split the sendout into separate sendouts by timezone
+        $sendoutsByTimezone = $this->createSendoutsByTimezone($sendout);
 
            foreach($sendoutsByTimezone as $sendoutByTimezone){
+
+                // Build a list of mailing list ids to be cleaned up
+                array_push($mailingListIds, $sendoutByTimezone->mailingListIds); 
 
                // Queue scheduled sendouts if pro version and the sendOutDate has passed
                if (Campaign::$plugin->getIsPro())
@@ -539,7 +536,26 @@ class SendoutsService extends Component
 
            }
 
+           // Remove temporary mailing lists
+           $this->cleanupTemporaryMailingLists($mailingListIds);
+
            return $count;
+    }
+
+    private function cleanupTemporaryMailingLists(array $mailingListIds)
+    {
+
+        foreach ($mailingListIds as $mailingListId){
+            $mailingList = Campaign::$plugin->mailingLists->getMailingListById($mailingListId);
+            
+            if($mailingList != null){
+                if (!Craft::$app->getElements()->deleteElement($mailingList)) {
+                    echo 'Attempt to delete mailing list: ' . $mailingList->id . ' failed.'; 
+                }
+            }
+          
+        }
+
     }
 
     /**
