@@ -381,10 +381,10 @@ class SendoutsService extends Component
             // Adjust the sendDate based on $timezone
             $sendDateForTimeZone = $this->calculateDateTimeForTimezone($timezone, $sendout->sendDate);
 
-             echo $timezone . ': ' . $sendDateForTimeZone->format('Y-m-d H:i:s') . "\n";
+            echo $timezone . ': ' . $sendDateForTimeZone->format('Y-m-d H:i:s') . "\n";
 
             if($this->canSendScheduleForTimezoneNow($sendDateForTimeZone)){
-        
+
                 $sendout->sendDate = $sendDateForTimeZone;
 
                 // Create a new mailing list for the timezone / contacts
@@ -404,8 +404,8 @@ class SendoutsService extends Component
             $count++;
         }
 
-     print_r(sizeof($sendoutsByTimezone));
-     exit;
+    //  print_r(sizeof($sendoutsByTimezone));
+    //  exit;
         return $sendoutsByTimezone;
     }
 
@@ -415,7 +415,12 @@ class SendoutsService extends Component
     public function canSendScheduleForTimezoneNow(DateTime $sendTime): bool
     {
         // Ensure send date is in the past
-        if (!DateTimeHelper::isInThePast($sendTime)) {
+        // if (!DateTimeHelper::isInThePast($sendTime)) {
+        //     return false;
+        // }
+        $now = new DateTime();
+        if($sendTime > $now)
+        {
             return false;
         }
 
@@ -518,26 +523,26 @@ class SendoutsService extends Component
                if (Campaign::$plugin->getIsPro())
                 {
 
-                   /** @var Queue $queue */
-                   $queue = Craft::$app->getQueue();
+                    /** @var Queue $queue */
+                    $queue = Craft::$app->getQueue();
 
-                   // Add sendout job to queue
-                   $queue->push(new SendoutJob([
-                       'sendoutId' => $sendoutByTimezone->id,
-                       'title' => $sendoutByTimezone->title,
-                   ]));
+                    // Add sendout job to queue
+                       $queue->push(new SendoutJob([
+                           'sendoutId' => $sendoutByTimezone->id,
+                           'title' => $sendoutByTimezone->title,
+                       ]));
 
-                   $sendoutByTimezone->sendStatus = SendoutElement::STATUS_QUEUED;
-
-                   $this->_updateSendoutRecord($sendoutByTimezone, ['sendStatus']);
-
-                   $count++;
+                    $sendoutByTimezone->sendStatus = SendoutElement::STATUS_QUEUED;
+   
+                    $this->_updateSendoutRecord($sendoutByTimezone, ['sendStatus']);
+                    
+                    $count++;
                }
 
            }
 
            // Remove temporary mailing lists
-           $this->cleanupTemporaryMailingLists($mailingListIds);
+            $this->cleanupTemporaryMailingLists($mailingListIds);
 
            return $count;
     }
@@ -545,16 +550,19 @@ class SendoutsService extends Component
     private function cleanupTemporaryMailingLists(array $mailingListIds)
     {
 
-        foreach ($mailingListIds as $mailingListId){
-            $mailingList = Campaign::$plugin->mailingLists->getMailingListById($mailingListId);
-            
-            if($mailingList != null){
-                if (!Craft::$app->getElements()->deleteElement($mailingList)) {
-                    echo 'Attempt to delete mailing list: ' . $mailingList->id . ' failed.'; 
+        if(isset($mailingListIds) && sizeof($mailingListIds) > 0){
+            foreach ($mailingListIds as $mailingListId){
+                $mailingList = Campaign::$plugin->mailingLists->getMailingListById($mailingListId);
+                
+                if($mailingList != null){
+                    if (!Craft::$app->getElements()->deleteElement($mailingList)) {
+                        echo 'Attempt to delete mailing list: ' . $mailingList->id . ' failed.'; 
+                    }
                 }
+              
             }
-          
         }
+      
 
     }
 
@@ -580,7 +588,7 @@ class SendoutsService extends Component
                 ->status(SendoutElement::STATUS_PENDING)
                 ->where(Db::parseDateParam('sendDate', $now, '<='))
                 ->all();
-
+//echo sizeof($sendouts); die();
             /** @var SendoutElement $sendout */
             foreach ($sendouts as $sendout) {
 
@@ -1053,10 +1061,10 @@ class SendoutsService extends Component
         if ($sendoutRecord === null) {
             return false;
         }
-
-        // Set attributes from sendout's fields
+//print_r($fields); die();
         $sendoutRecord->setAttributes($sendout->toArray($fields), false);
-
+  
+        
         return $sendoutRecord->save();
     }
 

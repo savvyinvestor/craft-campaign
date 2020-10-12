@@ -67,8 +67,9 @@ Campaign.SendoutEdit = Garnish.Base.extend(
             };
 
             Craft.postActionRequest('campaign/sendouts/send-sendout', data, function(response, textStatus) {
+                console.log(textStatus);
+                console.log(response);
                 $('.preflight .spinner').addClass('hidden');
-
                 if (textStatus === 'success') {
                     if (response.success) {
                         if (Craft.runQueueAutomatically) {
@@ -80,6 +81,7 @@ Campaign.SendoutEdit = Garnish.Base.extend(
                         });
                     }
                     else if (response.errors) {
+                        console.log(response.errors);
                         $('.preflight .error').text(response.error).removeClass('hidden');
                     }
                     else {

@@ -58,6 +58,7 @@ class SendoutsController extends Controller
      */
     public function actionQueuePendingSendouts(): Response
     {
+      
         $request = Craft::$app->getRequest();
 
         // Require permission if posted from utility
@@ -453,6 +454,7 @@ class SendoutsController extends Controller
      */
     public function actionSendSendout()
     {
+
         // Require permission to send
         $this->requirePermission('campaign:sendSendouts');
 
@@ -470,9 +472,9 @@ class SendoutsController extends Controller
 
         // Save it
         if (!Craft::$app->getElements()->saveElement($sendout)) {
-            if ($request->getAcceptsJson()) {
+           if ($request->getAcceptsJson()) {
                 return $this->asJson(['errors' => $sendout->getErrors()]);
-            }
+           }
 
             Craft::$app->getSession()->setError(Craft::t('campaign', 'Couldn’t save sendout.'));
 
@@ -490,9 +492,9 @@ class SendoutsController extends Controller
         // Queue pending sendouts
         Campaign::$plugin->sendouts->queuePendingSendouts();
 
-        if ($request->getAcceptsJson()) {
+       if ($request->getAcceptsJson()) {
             return $this->asJson(['success' => true]);
-        }
+       }
 
         Craft::$app->getSession()->setNotice(Craft::t('campaign', 'Sendout saved.'));
 
