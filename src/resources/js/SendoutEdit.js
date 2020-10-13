@@ -31,8 +31,6 @@ Campaign.SendoutEdit = Garnish.Base.extend(
             var data = {'sendoutId':sendoutId};
 
             Craft.postActionRequest('campaign/sendouts/prepare-sendouts-by-timezone', data, function(response, textStatus) {
-                console.log(response);
-                console.log(textStatus);
                 if (textStatus === 'success') {
                     if (response.success) {
                         Craft.cp.displayNotice(Craft.t('campaign', 'Timezone sendouts created.'));
@@ -42,7 +40,7 @@ Campaign.SendoutEdit = Garnish.Base.extend(
                     }
                 }
 
-                $('.send-test').removeClass('disabled');
+                $('.prepare').removeClass('disabled');
             });
         },
 

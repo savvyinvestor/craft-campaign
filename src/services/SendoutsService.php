@@ -260,8 +260,8 @@ class SendoutsService extends Component
         $mailingList = new MailingListElement();
 
         $mailingList->mailingListTypeId = 1;
-        $mailingList->title = $title . ': ' . $timezone . ' sent: ' . date("Y-m-d H:i:s");
-        $mailingList->slug = $title . ': ' . $timezone . ' sent: ' . date("Y-m-d H:i:s");
+        $mailingList->title = $title . ': ' . $timezone;
+        $mailingList->slug = $title . ': ' . $timezone;
         $mailingList->enabled = true;
         //$mailingList->fieldLayoutId = '';
 
@@ -389,7 +389,7 @@ class SendoutsService extends Component
                 // Adjust the sendDate based on $timezone
                 $sendDateForTimeZone = $this->calculateDateTimeForTimezone($timezone, $sendout->sendDate);
                 $sendoutForTimezone->sendDate = $sendDateForTimeZone;
-                echo $timezone . ': ' . $sendDateForTimeZone->format('Y-m-d H:i:s') . "\n";
+          //      echo $timezone . ': ' . $sendDateForTimeZone->format('Y-m-d H:i:s') . "\n";
                 // Create a new mailing list for the timezone / contacts
                 $mailingListForTimezone = $this->createMailingListForTimezone($sendout->campaign->title, $recipientTimezones, $timezone);
                 $sendoutForTimezone->mailingListIds = $mailingListForTimezone->id;
@@ -400,7 +400,7 @@ class SendoutsService extends Component
                 $sendoutForTimezone->excludedMailingListIds = $sendout->excludedMailingListIds;
                 $sendoutForTimezone->subject = $sendout->campaign->title;
                 $sendoutForTimezone->title = $sendout->campaign->title . ' - ' . $timezone;
-                $sendoutForTimezone->sendStatus = 'Pending';
+                $sendoutForTimezone->sendStatus = 'pending';
 
                 if (!Craft::$app->getElements()->saveElement($sendoutForTimezone)) {
                     echo 'Could not save timezone sendout.';
@@ -482,78 +482,7 @@ class SendoutsService extends Component
  
         return $recipientTimezones;
 
-    } 
-
-    private function processSendout(SendoutElement $sendout, int $count): int 
-    {
-
-            // Queue regular and scheduled sendouts, automated and recurring sendouts if pro version and the sendout can send now
-            if ($sendout->sendoutType == 'regular' 
-            || (($sendout->sendoutType == 'automated' || $sendout->sendoutType == 'recurring')
-                && Campaign::$plugin->getIsPro() && $sendout->getCanSendNow()
-                )
-            ) 
-            {
-                /** @var Queue $queue */
-                $queue = Craft::$app->getQueue();
-
-                // Add sendout job to queue
-                $queue->push(new SendoutJob([
-                    'sendoutId' => $sendout->id,
-                    'title' => $sendout->title,
-                ]));
-
-                $sendout->sendStatus = SendoutElement::STATUS_QUEUED;
-
-                $this->_updateSendoutRecord($sendout, ['sendStatus']);
-
-                $count++;
-            }
-
-            return $count;
-
-    }
-
-    private function processScheduledSendouts(SendoutElement $sendout, int $count): int
-    {
-
-        $mailingListIds = array();
-
-        // Split the sendout into separate sendouts by timezone
-        $sendoutsByTimezone = $this->createSendoutsByTimezone($sendout);
-
-           foreach($sendoutsByTimezone as $sendoutByTimezone){
-
-                // Build a list of mailing list ids to be cleaned up
-                array_push($mailingListIds, $sendoutByTimezone->mailingListIds); 
-
-               // Queue scheduled sendouts if pro version and the sendOutDate has passed
-               if (Campaign::$plugin->getIsPro())
-                {
-
-                    /** @var Queue $queue */
-                    $queue = Craft::$app->getQueue();
-
-                    // Add sendout job to queue
-                       $queue->push(new SendoutJob([
-                           'sendoutId' => $sendoutByTimezone->id,
-                           'title' => $sendoutByTimezone->title,
-                       ]));
-
-                    $sendoutByTimezone->sendStatus = SendoutElement::STATUS_QUEUED;
-   
-                    $this->_updateSendoutRecord($sendoutByTimezone, ['sendStatus']);
-                    
-                    $count++;
-               }
-
-           }
-
-           // Remove temporary mailing lists
-            $this->cleanupTemporaryMailingLists($mailingListIds);
-
-           return $count;
-    }
+    }           
 
     private function cleanupTemporaryMailingLists(array $mailingListIds)
     {
@@ -589,37 +518,38 @@ class SendoutsService extends Component
         $sites = Craft::$app->getSites()->getAllSites();
 
         foreach ($sites as $site) {
-            
             // Find pending sendouts whose send date is in the past
             $sendouts = SendoutElement::find()
                 ->site($site)
                 ->status(SendoutElement::STATUS_PENDING)
                 ->where(Db::parseDateParam('sendDate', $now, '<='))
                 ->all();
-//echo sizeof($sendouts); die();
+
             /** @var SendoutElement $sendout */
             foreach ($sendouts as $sendout) {
+                // Queue regular and scheduled sendouts, automated and recurring sendouts if pro version and the sendout can send now
+                if ($sendout->sendoutType == 'regular' || $sendout->sendoutType == 'scheduled'
+                    || (($sendout->sendoutType == 'automated' || $sendout->sendoutType == 'recurring')
+                        && Campaign::$plugin->getIsPro() && $sendout->getCanSendNow()
+                    )
+                ) {
+                    /** @var Queue $queue */
+                    $queue = Craft::$app->getQueue();
 
-                switch($sendout->sendoutType)
-                {
-                    case 'regular':
-                        $this->processSendout($sendout, $count);
-                        break;
-                    case 'automated':
-                        $this->processSendout($sendout, $count);
-                        break;
-                    case 'recurring':
-                        $this->processSendout($sendout, $count);
-                        break;
-                    case 'scheduled':
-                        $this->processScheduledSendouts($sendout, $count);
-                        break;
-                    default:
-                        echo 'Sendout type did not match. Campaign did not run.';         
-                
+                    // Add sendout job to queue
+                    $queue->push(new SendoutJob([
+                        'sendoutId' => $sendout->id,
+                        'title' => $sendout->title,
+                    ]));
+
+                    $sendout->sendStatus = SendoutElement::STATUS_QUEUED;
+
+                    $this->_updateSendoutRecord($sendout, ['sendStatus']);
+
+                    $count++;
                 }
-             }
             }
+        }
 
         return $count;
     }

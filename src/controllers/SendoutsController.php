@@ -59,18 +59,24 @@ class SendoutsController extends Controller
      */
     public function actionPrepareSendoutsByTimezone(): Response
     {
-        // Get status from request
-        $request = Craft::$app->getRequest();
-        $sendoutId = $request->getBodyParam('sendoutId');
 
-        $response = Craft::$app->getResponse();
+        try{
+            // Get status from request
+            $request = Craft::$app->getRequest();
+            $sendoutId = $request->getBodyParam('sendoutId');
 
-        $count = Campaign::$plugin->sendouts->createSendoutsByTimezone($sendoutId);
+            $count = Campaign::$plugin->sendouts->createSendoutsByTimezone($sendoutId);
+        }catch(Exception $e){
+            throw new Exception('An error occurred : ' . $e->getMessage());
+        }
 
-exit;
-     //   return $this->asJson($response->content);
+        if ($request->getAcceptsJson()) {
+            return $this->asJson(['success' => true]);
+        }
 
-        return $response;
+        Craft::$app->getSession()->setNotice(Craft::t('campaign', '{count} pending sendout(s) created.', ['count' => $count]));
+
+        return $this->redirectToPostedUrl();
     }
 
     /**
