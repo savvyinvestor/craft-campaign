@@ -19,14 +19,16 @@ Campaign.SendoutEdit = Garnish.Base.extend(
 
         // Custom Savvy Investor method
         prepareSendoutsByTimezone: function(event) {
-            console.log('Boo!');
-            if ($('.send-test').hasClass('disabled')) {
-                return;
-            }
+       
+            // if ($('.prepare').hasClass('disabled')) {
+            //     return;
+            // }
 
-            $('.send-test').addClass('disabled');
+            // $('.prepare').addClass('disabled');
 
-            var data = {'status':'pending'};
+            var sendoutId = $('input[name=sendoutId]').val();
+
+            var data = {'sendoutId':sendoutId};
 
             Craft.postActionRequest('campaign/sendouts/prepare-sendouts-by-timezone', data, function(response, textStatus) {
                 console.log(response);

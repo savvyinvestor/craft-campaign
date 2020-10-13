@@ -61,14 +61,16 @@ class SendoutsController extends Controller
     {
         // Get status from request
         $request = Craft::$app->getRequest();
-        $status = $request->getBodyParam('status');
+        $sendoutId = $request->getBodyParam('sendoutId');
 
         $response = Craft::$app->getResponse();
 
+        $count = Campaign::$plugin->sendouts->createSendoutsByTimezone($sendoutId);
 
-        return $this->asJson($response->content);
+exit;
+     //   return $this->asJson($response->content);
 
-        return $this->asJson(['success' => true]);
+        return $response;
     }
 
     /**

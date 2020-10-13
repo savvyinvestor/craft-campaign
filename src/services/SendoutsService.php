@@ -358,13 +358,20 @@ class SendoutsService extends Component
     /**
      * Takes a sendout and splits it into multiple sendouts based on each timezone
      * 
-     * @param SendoutElement $sendout
+     * @param int $sendoutId
      * 
-     * @return array
+     * @return int
      */
-    public function createSendoutsByTimezone(SendoutElement $sendout): array
+    public function createSendoutsByTimezone(int $sendoutId): int
     {
         $sendoutsByTimezone = array();
+
+        // Get the sendout
+        $sendout = SendoutElement::find()
+        ->where(['campaign_sendouts.id' => $sendoutId])
+        ->one();
+
+        exit;
 
         // All recipients and their timezones
         $recipientTimezones = $this->getRecipientTimezones($sendout);
@@ -399,6 +406,8 @@ class SendoutsService extends Component
                 // Clone the sendout
                 ${'sendout' . $count} = clone $sendout;
 
+                // Save sendout
+
                 array_push($sendoutsByTimezone, ${'sendout' . $count});
             }
            
@@ -407,7 +416,7 @@ class SendoutsService extends Component
 
     //  print_r(sizeof($sendoutsByTimezone));
     //  exit;
-        return $sendoutsByTimezone;
+        return $$count;
     }
 
         /**
