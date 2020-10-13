@@ -364,16 +364,14 @@ class SendoutsService extends Component
      */
     public function createSendoutsByTimezone(int $sendoutId): int
     {
-        $sendoutsByTimezone = array();
-
+       
         // Get the sendout
         $sendout = SendoutElement::find()
         ->where(['campaign_sendouts.id' => $sendoutId])
         ->one();
 
-        exit;
-
-        // All recipients and their timezones
+        if($sendout != null){
+                // All recipients and their timezones
         $recipientTimezones = $this->getRecipientTimezones($sendout);
 
         // timezones we need to send to
@@ -382,41 +380,37 @@ class SendoutsService extends Component
         // For each timezone, create a separate sendout, work out the time difference for each and set that as the send date for the sendout
         $count = 0;
 
-        foreach($timezonesUnique as $timezone)
-        {
+            foreach($timezonesUnique as $timezone)
+            {
 
-            // Adjust the sendDate based on $timezone
-            $sendDateForTimeZone = $this->calculateDateTimeForTimezone($timezone, $sendout->sendDate);
-
-            echo $timezone . ': ' . $sendDateForTimeZone->format('Y-m-d H:i:s') . "\n";
-
-            if($this->canSendScheduleForTimezoneNow($sendDateForTimeZone)){
-
-                $sendout->sendDate = $sendDateForTimeZone;
-
+                // Create a new sendout 
+                $sendoutForTimezone = new SendoutElement();
+                $sendoutForTimezone->campaignId = $sendout->campaignId;
+                // Adjust the sendDate based on $timezone
+                $sendDateForTimeZone = $this->calculateDateTimeForTimezone($timezone, $sendout->sendDate);
+                $sendoutForTimezone->sendDate = $sendDateForTimeZone;
+                echo $timezone . ': ' . $sendDateForTimeZone->format('Y-m-d H:i:s') . "\n";
                 // Create a new mailing list for the timezone / contacts
                 $mailingListForTimezone = $this->createMailingListForTimezone($sendout->campaign->title, $recipientTimezones, $timezone);
-    
-                // Remove existing mail lists
-                $sendout->mailingListIds = null;
-    
+                $sendoutForTimezone->mailingListIds = $mailingListForTimezone->id;
                 // Add mail list created for timezone
-                $sendout->mailingListIds = $mailingListForTimezone->id;
-    
-                // Clone the sendout
-                ${'sendout' . $count} = clone $sendout;
+                $sendoutForTimezone->sendoutType = $sendout->sendoutType;
+                $sendoutForTimezone->fromName = $sendout->fromName;
+                $sendoutForTimezone->fromEmail = $sendout->fromEmail;
+                $sendoutForTimezone->excludedMailingListIds = $sendout->excludedMailingListIds;
+                $sendoutForTimezone->subject = $sendout->campaign->title;
+                $sendoutForTimezone->title = $sendout->campaign->title . ' - ' . $timezone;
+                $sendoutForTimezone->sendStatus = 'Pending';
 
-                // Save sendout
+                if (!Craft::$app->getElements()->saveElement($sendoutForTimezone)) {
+                    echo 'Could not save timezone sendout.';
+                }
 
-                array_push($sendoutsByTimezone, ${'sendout' . $count});
+                $count++;
             }
-           
-            $count++;
         }
-
-    //  print_r(sizeof($sendoutsByTimezone));
-    //  exit;
-        return $$count;
+    
+        return $count;
     }
 
         /**
