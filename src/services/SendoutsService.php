@@ -398,6 +398,7 @@ class SendoutsService extends Component
     
                 // Clone the sendout
                 ${'sendout' . $count} = clone $sendout;
+
                 array_push($sendoutsByTimezone, ${'sendout' . $count});
             }
            
@@ -419,20 +420,24 @@ class SendoutsService extends Component
         //     return false;
         // }
         $now = new DateTime();
-        if($sendTime > $now)
+        $format = 'Y-m-d H:i:s';
+        $nowTime = strtotime($now->format($format));
+        $sendTime = strtotime($sendTime->format($format));
+
+        if($sendTime > $nowTime )
         {
             return false;
         }
 
         // Ensure time of day has past
-        if ($sendTime !== null) {
-            $now = new DateTime();
-            $format = 'H:i';
+        // if ($sendTime !== null) {
+        //     $now = new DateTime();
+        //     $format = 'H:i';
 
-            if ($sendTime->format($format) > $now->format($format)) {
-                return false;
-            }
-        }
+        //     if ($sendTime->format($format) > $now->format($format)) {
+        //         return false;
+        //     }
+        // }
         return true;
     }
 

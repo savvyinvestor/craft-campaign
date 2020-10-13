@@ -6,6 +6,7 @@
 {% set launchedMessage = 'Sendout Queued for Sending!'|t('campaign') %}
 {% if sendout.sendoutType == 'scheduled' %}
     {% set prepLabel = 'Prepare to Schedule Sending'|t('campaign') %}
+    {% set prepareSendoutsByTimezoneLabel = 'Prepare Sendouts by Timezone'|t('campaign') %}
     {% set saveLabel = 'Schedule Sending'|t('campaign') %}
     {% set confirmMessage = 'This sendout will be scheduled to send on {sendDate} to {recipients} contact(s) in {mailingLists} mailing list(s).'|t('campaign', params) %}
     {% set launchedMessage = 'Sendout Scheduled!'|t('campaign') %}
@@ -26,7 +27,9 @@
     {% set launchedMessage = 'Sendout Resumed!'|t('campaign') %}
 {% endif %}
 
-<input type="button" class="btn submit prepare" value="{{ prepLabel }}">
+<!-- <input type="button" class="btn submit prepare" value="{{ prepLabel }}"> -->
+
+<input type="button" class="btn submit prepare" value="{{ prepareSendoutsByTimezoneLabel }}"> 
 
 <div class="modal preflight" style="display: none;">
     <div class="confirm">

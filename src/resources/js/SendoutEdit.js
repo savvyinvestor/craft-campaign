@@ -10,10 +10,38 @@ Campaign.SendoutEdit = Garnish.Base.extend(
 
         init: function() {
             this.getPendingRecipientCount();
-            this.addListener($('.prepare'), 'click', 'preflight');
+        //    this.addListener($('.prepare'), 'click', 'preflight');  // Original plugin functionality
             this.addListener($('.preflight .cancel'), 'click', 'cancel');
             this.addListener($('.preflight .launch'), 'click', 'launch');
             this.addListener($('.send-test'), 'click', 'sendTest');
+            this.addListener($('.prepare'), 'click', 'prepareSendoutsByTimezone'); // Savvy Investor custom code
+        },
+
+        // Custom Savvy Investor method
+        prepareSendoutsByTimezone: function(event) {
+            console.log('Boo!');
+            if ($('.send-test').hasClass('disabled')) {
+                return;
+            }
+
+            $('.send-test').addClass('disabled');
+
+            var data = {'status':'pending'};
+
+            Craft.postActionRequest('campaign/sendouts/prepare-sendouts-by-timezone', data, function(response, textStatus) {
+                console.log(response);
+                console.log(textStatus);
+                if (textStatus === 'success') {
+                    if (response.success) {
+                        Craft.cp.displayNotice(Craft.t('campaign', 'Timezone sendouts created.'));
+                    }
+                    else {
+                        Craft.cp.displayError(response.error);
+                    }
+                }
+
+                $('.send-test').removeClass('disabled');
+            });
         },
 
         getPendingRecipientCount: function() {
@@ -67,8 +95,6 @@ Campaign.SendoutEdit = Garnish.Base.extend(
             };
 
             Craft.postActionRequest('campaign/sendouts/send-sendout', data, function(response, textStatus) {
-                console.log(textStatus);
-                console.log(response);
                 $('.preflight .spinner').addClass('hidden');
                 if (textStatus === 'success') {
                     if (response.success) {

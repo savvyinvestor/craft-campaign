@@ -48,6 +48,29 @@ class SendoutsController extends Controller
     // Public Methods
     // =========================================================================
 
+      /**
+     * Sets senout status o pending
+     *
+     * @return Response
+     * @throws BadRequestHttpException
+     * @throws Exception
+     * @throws InvalidConfigException
+     * @throws NotFoundHttpException
+     */
+    public function actionPrepareSendoutsByTimezone(): Response
+    {
+        // Get status from request
+        $request = Craft::$app->getRequest();
+        $status = $request->getBodyParam('status');
+
+        $response = Craft::$app->getResponse();
+
+
+        return $this->asJson($response->content);
+
+        return $this->asJson(['success' => true]);
+    }
+
     /**
      * Queues pending sendouts
      *
