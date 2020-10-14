@@ -278,7 +278,9 @@ class SendoutsService extends Component
         }
 
         if (!Craft::$app->getElements()->saveElement($mailingList)) {
-            echo 'Could not save mailing list.';
+            Craft::$app->getSession()->setError(Craft::t('campaign', 'Couldn’t save mailing list.'));
+
+            return null;
         }
  
         return $mailingList ;
@@ -337,7 +339,7 @@ class SendoutsService extends Component
     public function calculateDateTimeForTimezone(string $timezone, DateTime $sendDate): DateTime
     {
 
-        $gmtTimezone = new \DateTimeZone('GMT');
+        $gmtTimezone = new \DateTimeZone('Europe/London');
         $userTimezone = new \DateTimeZone($timezone);
         $sendDateTime = new DateTime($sendDate->format('Y-m-d H:i:s'), $gmtTimezone);
         $offset = $userTimezone->getOffset($sendDateTime);
@@ -398,12 +400,15 @@ class SendoutsService extends Component
                 $sendoutForTimezone->fromName = $sendout->fromName;
                 $sendoutForTimezone->fromEmail = $sendout->fromEmail;
                 $sendoutForTimezone->excludedMailingListIds = $sendout->excludedMailingListIds;
-                $sendoutForTimezone->subject = $sendout->campaign->title;
-                $sendoutForTimezone->title = $sendout->campaign->title . ' - ' . $timezone;
+                $sendoutForTimezone->segmentIds = $sendout->segmentIds;
+                $sendoutForTimezone->subject = $sendout->title;
+                $sendoutForTimezone->title = $sendout->title . ' - ' . $timezone;
                 $sendoutForTimezone->sendStatus = 'pending';
 
                 if (!Craft::$app->getElements()->saveElement($sendoutForTimezone)) {
-                    echo 'Could not save timezone sendout.';
+                    Craft::$app->getSession()->setError(Craft::t('campaign', 'Couldn’t save sendout.'));
+
+                    return null;
                 }
 
                 $count++;
@@ -411,37 +416,6 @@ class SendoutsService extends Component
         }
     
         return $count;
-    }
-
-        /**
-     * @inheritdoc
-     */
-    public function canSendScheduleForTimezoneNow(DateTime $sendTime): bool
-    {
-        // Ensure send date is in the past
-        // if (!DateTimeHelper::isInThePast($sendTime)) {
-        //     return false;
-        // }
-        $now = new DateTime();
-        $format = 'Y-m-d H:i:s';
-        $nowTime = strtotime($now->format($format));
-        $sendTime = strtotime($sendTime->format($format));
-
-        if($sendTime > $nowTime )
-        {
-            return false;
-        }
-
-        // Ensure time of day has past
-        // if ($sendTime !== null) {
-        //     $now = new DateTime();
-        //     $format = 'H:i';
-
-        //     if ($sendTime->format($format) > $now->format($format)) {
-        //         return false;
-        //     }
-        // }
-        return true;
     }
 
     /**

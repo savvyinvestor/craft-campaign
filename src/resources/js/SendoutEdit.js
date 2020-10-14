@@ -20,11 +20,11 @@ Campaign.SendoutEdit = Garnish.Base.extend(
         // Custom Savvy Investor method
         prepareSendoutsByTimezone: function(event) {
        
-            // if ($('.prepare').hasClass('disabled')) {
-            //     return;
-            // }
+            if ($('.prepare').hasClass('disabled')) {
+                return;
+            }
 
-            // $('.prepare').addClass('disabled');
+            $('.prepare').addClass('disabled');
 
             var sendoutId = $('input[name=sendoutId]').val();
 
