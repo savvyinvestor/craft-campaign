@@ -345,16 +345,42 @@ class SendoutsService extends Component
         $offset = $userTimezone->getOffset($sendDateTime);
         $dst = date('I');
 
+        $isBehind = $offset < 0 ? true : false;
+
         // Factor for day light savings
         if($dst == 1){
             $offset -= 3600;
         }
     
         $myInterval = \DateInterval::createFromDateString((string) abs($offset) . 'seconds');
-        $sendDateTime->add($myInterval);
+
+        if($isBehind){
+            $sendDateTime->add($myInterval);
+        }else{
+            $sendDateTime->sub($myInterval);
+        }
+        
+        // If the send time has passed, send the next day
+        if($this->hasPassed($sendDateTime)){
+            $tomorrowInterval = \DateInterval::createFromDateString((string) 86400 . 'seconds');
+            $sendDateTime->add($tomorrowInterval);
+        }
 
         return $sendDateTime;
        
+    }
+
+    private function hasPassed(DateTime $sendDateTime){
+
+        $now = new DateTime();
+
+        if($sendDateTime < $now)
+        {
+            return true;
+        }
+
+        return false;
+
     }
 
     /**
